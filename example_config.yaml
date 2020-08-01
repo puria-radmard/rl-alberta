@@ -1,0 +1,35 @@
+# Argument choices for a standard run. Rules and definitions are explained in the comments
+
+## General set-up
+
+# Must be = len(epses)
+num_agents: 8
+# Number of steps in run
+num_steps: 10000
+# Number of bandits
+k: 10
+# Number of runs (identical runs repeated for each agent this number of times)
+num_runs: 200
+
+## Agent parameters
+
+# A choice of "incremental" or "constant" - either string for all agents, or a list for each agent
+step_methods: "constant"
+# Either float epsilon for all agents in set up, or a list of epsilons for each agent. Used for all step_method choices
+epses: [1, 0.5, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0.0]
+# !! Only relevant for step_method = "constant" - constant step size. Similar choice as two params above
+alphas: 0.1
+# Initial predictions for bandit made by each agent. Similar choice as two params above
+Q0s: 5.0
+# UCB parameter for each agent (set to 0 for no UCB effect)
+cs: 0.2
+
+## Bandit parameters - only homogenous so far
+
+# Mean and variation of bandit rewards - same for all
+reward_uncertainty: 1
+q_mean: 0
+# Bandit initialisation spread
+q_var: 1
+# Standard deviation of change taken by true q* each step (i.e. non-stationary variation)
+variation_step: 0
