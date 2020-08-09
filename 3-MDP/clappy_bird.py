@@ -1,150 +1,93 @@
-import turtle
-from random import randint
-from time import sleep
+from avatars import *
 
-#Set up screen
-wn = turtle.Screen()
-wn.title("Clappy Bird by Puria Radmard")
-wn.bgcolor("deep sky blue")
-wn.setup(width=600, height=600)
-wn.tracer(0)
+from rl import Environment, Agent
 
-#definitions
-score = 0
-highscore = 0
-tubeimg = "tubes.gif"
-wn.addshape(tubeimg)
-tubes = []
-g = -50
-v = 0
+env = Environment(
+    tube_v = 10,
+    g = -50
+)
 
-#Bird
-bird = turtle.Turtle()
-bird.speed(0)
-bird.shape("triangle")
-bird.color("yellow")
-bird.penup()
-bird.goto(-100,0)
-bird.direction="stop"
+agent = Agent(
+    jump_speed = 30,
+    bird=bird
+)
 
-#scoreboard
-pen = turtle.Turtle()
-pen.speed(0)
-pen.shape("square")
-pen.color("white")
-pen.penup()
-pen.hideturtle()
-pen.goto(0,-260)
-pen.write("Score: {}    High Score: {}".format(score, highscore), align = "center", font=("Comic Sans", 24,"bold"))
-
-#intro screen
-title = turtle.Turtle()
-title.speed(0)
-title.shape("square")
-title.color("white")
-title.penup()
-title.hideturtle()
-title.goto(0,260)
-title.write("Clappy Bird", align = "center", font=("Comic Sans", 24,"bold"))
-
-subtitle = turtle.Turtle()
-subtitle.speed(0)
-subtitle.shape("square")
-subtitle.color("white")
-subtitle.penup()
-subtitle.hideturtle()
-subtitle.goto(0,230)
-subtitle.write("press space to start", align = "center", font=("Comic Sans", 16,"bold"))
-
-#define jumps
-def jump():
-    bird.direction = "up"
-    global v
-    v = 30         
 wn.listen()
-wn.onkeypress(jump, "space")
+wn.onkeypress(agent.jump, "space")
 
 #Game loop including start screen and death
 while True:
     
     #Set up game
     game_state = 1
-    tubes = []
     score = 0    
     pen.clear()
-    pen.write("Score: {}    High Score: {}".format(score, highscore), align = "center", font=("Comic Sans", 24,"bold")) 
+    pen.write("Score: {}    High Score: {}".format(score, highscore), align = "center", font=("Comic Sans", 12,"bold")) 
     title.write("Clappy Bird", align = "center", font=("Comic Sans", 24,"bold"))
     subtitle.write("press space to start", align = "center", font=("Comic Sans", 16,"bold"))
     
     #Start screen
     while True:
         wn.update()
-        bird.goto(-100,0)        
-        if bird.direction == "up":
+        agent.goto(-3050,0)        
+        if agent.bird.direction == "up":
             title.clear()
             subtitle.clear()
             break
         else:
             pass
-    
+
     #Main game loop
     n = 0
     while True:
         wn.update()        
         
+        # agent.
+
         #Implement gravity
-        v += 0.05*g
-        y = bird.ycor()
-        bird.sety(y + v)
-        
+        agent.implement_gravity(env)
+        game_state = agent.check_for_death(env)
+        score = agent.check_for_new_score(env, score)
+
         #Generate tube on RHS
-        if n%30 == 0:
-            tube = turtle.Turtle()
-            tube.speed(0)
-            tube.shape(tubeimg)
-            tube.penup()
-            tube.direction="stop" 
-            tube.goto(310, randint(-200, 200))
-            tubes.append(tube)
-        
+        if n%25 == 0:
+            env.generate_new_tube()
+
         #tubes cascade to LHS
-        for i in range(len(tubes)-1):
-            x = tubes[i].xcor()
-            tubes[i].setx(x - 10)
-        
-        #set collisions and scoring
-        if len(tubes) < 3:
-            for i in range(len(tubes) - 1):
-                if abs(tubes[i].xcor()-bird.xcor()) < 6 and abs(tubes[i].ycor() - bird.ycor()) < 78:
-                    score += 1
-                elif abs(tubes[i].xcor()-bird.xcor()) < 6 and abs(tubes[i].ycor() - bird.ycor()) > 78:
-                    game_state = 0            
-        else:
-            for i in range(-1, -4, -1):
-                if abs(tubes[i].xcor()-bird.xcor()) < 6 and abs(tubes[i].ycor() - bird.ycor()) < 78:
-                    score += 1
-                elif abs(tubes[i].xcor()-bird.xcor()) < 6 and abs(tubes[i].ycor() - bird.ycor()) > 78:
-                    game_state = 0   
-        if bird.ycor() < -300:
-            game_state = 0   
+        for i in range(len(env.tubes)):
+            x = env.tubes[i].x
+            env.tubes[i].setx(x - env.tube_v)
+
         if score > highscore:
             highscore = score
-        
+
         #update score
         pen.clear()
-        pen.write("Score: {}    High Score: {}".format(score, highscore), align = "center", font=("Comic Sans", 24,"bold"))
+        pen.write("Score: {}    High Score: {}".format(score, highscore), align = "center", font=("Comic Sans", 12,"bold"))
         sleep(0.05)
         n += 1
         if game_state == 0:
             break
         else:
             pass
+
+        for i, tube in enumerate(env.tubes):
+            if tube.x < -300:
+                del env.tubes[i]
+        
+        print(len(env.tubes))
+
+        agent.refresh_coords()
     
     #death    
-    for tube in tubes:
-        tube.goto(1000,1000)
+    for tube in env.tubes:
+        tube.goto(-1000,-1000)
+        del tube
     bird.direction = "stop"       
 
 #finalise  
 wn.mainloop()
 turtle.done()
+
+if __name__ == "__main__":
+    main()
