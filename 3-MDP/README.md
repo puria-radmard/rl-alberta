@@ -1,0 +1,1 @@
+export DISPLAY=$(w -h $USER | awk '$2 ~ /:[0-9.]*/{print $2}')

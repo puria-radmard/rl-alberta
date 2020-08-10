@@ -1,0 +1,35 @@
+define
+
+    state sub entity,
+
+        plays start-state,
+        plays end-state,
+        
+        has energy-level,
+        has absolute-height,
+        has relative-height,
+        has side-of-gap,
+
+        # This is non-zero for special states
+        has reward,
+
+        has time-since-jump;
+
+    state-transition sub relation,
+
+        relates start-state,
+        relates end-state,
+
+        has num_occurances,
+
+
+    energy-level sub attribute,
+        value string;
+    absolute-height sub attribute,
+        value string;
+    relative-height sub attribute,
+        value string;
+    side-of-gap sub attribute,
+        value string;
+    reward sub attribute,
+        value long;    
