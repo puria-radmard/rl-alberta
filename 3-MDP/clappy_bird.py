@@ -1,9 +1,11 @@
-from avatars import *
+from graphics_util import *
 from rl import Environment, Agent
 
-env = Environment(tube_v=10, g=-50)
+env = Environment(
+    tube_v=10, g=-50, death_reward=-10, score_reward=2, low_energy_reward=-0.1
+)
 
-agent = Agent(jump_speed=30, jump_cost=20, stamina=0.75, avi=bird)
+agent = Agent(jump_speed=30, jump_cost=20, stamina=0.75, discount_rate=0.9, avi=bird)
 
 wn.listen()
 wn.onkeypress(agent.jump, "space")
@@ -12,18 +14,9 @@ wn.onkeypress(agent.jump, "space")
 while True:
 
     # Set up game
-    game_state = 1
-    score = 0
-    pen.clear()
-    pen.write(
-        "Score: {}    High Score: {}".format(score, highscore),
-        align="center",
-        font=("Comic Sans", 12, "bold"),
-    )
-    title.write("Clappy Bird", align="center", font=("Comic Sans", 24, "bold"))
-    subtitle.write(
-        "press space to start", align="center", font=("Comic Sans", 16, "bold")
-    )
+    env.game_state = 1
+    agent.player_score = 0
+    init_pens(pen, title, subtitle, agent.player_score, highscore)
 
     # Start screen
     while True:
@@ -32,6 +25,7 @@ while True:
         agent.energy = 100
         energy_pen.clear()
         state_pen.clear()
+        agent.jump()
         if agent.avi.direction == "up":
             title.clear()
             subtitle.clear()
@@ -41,77 +35,60 @@ while True:
 
     # Main game loop
     agent.t = 0
-    prev_state = None
+    agent.prev_state = agent.state
+
     while True:
         wn.update()
 
-        # Standard loop actions
-        agent.regain_energy()
-        agent.implement_gravity(env)
-        game_state = agent.check_for_death(env)
-        score = agent.check_for_new_score(env, score)
+        env.move_tubes(agent)
 
-        # Generate tube on RHS
-        if agent.t % 25 == 0:
-            env.generate_new_tube()
-
-        # tubes cascade to LHS
-        for i in range(len(env.tubes)):
-            x = env.tubes[i].x
-            env.tubes[i].setx(x - env.tube_v)
-
-        if score > highscore:
-            highscore = score
-
-        # update score
-        pen.clear()
-        pen.write(
-            f"Score: {score}    High Score: {highscore}",
-            align="center",
-            font=("Comic Sans", 12, "bold"),
-        )
+        if agent.player_score > highscore:
+            highscore = agent.player_score
 
         sleep(0.05)
         agent.t += 1
         agent.time_since_jump += 1
-        if game_state == 0:
+        if env.game_state == 0:
             break
         else:
             pass
 
-        for i, tube in enumerate(env.tubes):
-            if tube.x < -300:
-                del env.tubes[i]
+        # Get s_t
+        agent.state = agent.find_state(env)
 
-        # Find current state
-        state = agent.find_state(env)
-        ### MAKE GRAPH ENTRY HERE
-        prev_state = state
+        # Do r_t
+        a_t = agent.apply_policy()
 
-        state_pen.clear()
-        state_string = ""
-        for k, v in state.items():
-            state_string += f"{k}: {v} \n"
-        state_pen.write(state_string, align="left", font=("Comic Sans", 20, "bold"))
+        # Get r_t from s_t and a_t
+        r_t = agent.read_environment(env)
 
-        if agent.energy > 80:
-            energy_color = "green"
-        elif agent.energy > 30:
-            energy_color = "yellow"
-        else:
-            energy_color = "red"
+        # Memory build up for this episode
+        # A[t] made at/after S[t], giving R[t]
+        agent.S.append(agent.state.copy())
+        agent.A.append(a_t)
+        agent.R.append(r_t)
 
-        energy_pen.clear()
-        energy_pen.color(energy_color)
-        energy_pen.write(
-            f"E: {int(agent.energy)}", align="left", font=("Comic Sans", 20, "bold")
-        )
+        print(agent.S[-1], agent.A[-1], agent.R[-1])
+
+        agent.prev_state = agent.state
+
+        # Standard loop actions
+        agent.regain_energy()
+        agent.implement_gravity(env)
+
+        update_pens(agent, state_pen, pen, energy_pen, agent.player_score)
 
     # death
     for tube in env.tubes:
         tube.goto(-1000, -1000)
         del tube
     agent.avi.direction = "stop"
+    agent.state = agent.death_state
+    agent.S.append(agent.state.copy())
+
+    # Apply expected returns and Bellman's
+    agent.post_process()
+
 
 # finalise
 wn.mainloop()
