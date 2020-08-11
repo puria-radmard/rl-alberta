@@ -40,7 +40,7 @@ while True:
             pass
 
     # Main game loop
-    t = 0
+    agent.t = 0
     prev_state = None
     while True:
         wn.update()
@@ -52,7 +52,7 @@ while True:
         score = agent.check_for_new_score(env, score)
 
         # Generate tube on RHS
-        if t % 25 == 0:
+        if agent.t % 25 == 0:
             env.generate_new_tube()
 
         # tubes cascade to LHS
@@ -72,7 +72,8 @@ while True:
         )
 
         sleep(0.05)
-        t += 1
+        agent.t += 1
+        agent.time_since_jump += 1
         if game_state == 0:
             break
         else:

@@ -56,6 +56,8 @@ class Agent(TurtleController):
         self.stamina = stamina
 
         self.energy = 100
+        self.t = 0
+        self.time_since_jump = 0
 
         self.vertical_speed = 0
         self.avi = avi
@@ -67,6 +69,7 @@ class Agent(TurtleController):
             self.avi.direction = "up"
             self.vertical_speed = self.jump_speed
             self.energy -= self.jump_cost
+            self.time_since_jump = 0
 
     def regain_energy(self):
         if self.energy < 100:
@@ -155,6 +158,15 @@ class Agent(TurtleController):
         else:
             state_dict["energy-level"] = "LOW"
 
+        if self.y > 260:
+            state_dict["absolute-height"] = "HIGH"
+        elif self.y < -260:
+            state_dict["absolute-height"] = "LOW"
+        else:
+            state_dict["absolute-height"] = "MID"
+
+        state_dict["time-since-jump"] = self.time_since_jump
+        
         return state_dict
 
 
