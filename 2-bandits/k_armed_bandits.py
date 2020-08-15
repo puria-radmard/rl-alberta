@@ -1,7 +1,7 @@
 from blocks import *
-import default_args
 import yaml
 import sys
+from pprint import pprint
 from tqdm import tqdm
 
 def parameter_array(param_name, param, type_, len_):
@@ -97,12 +97,36 @@ def averaged_runs(
 
 if __name__ == "__main__":
 
-    args = default_args.args.copy()
+    args = {
+        "epses": None,
+        "num_agents": None,
+        "num_steps": None,
+        "k": None,
+        "q_var": None,
+        "q_mean": None,
+        "alphas": None,
+        "step_methods": None,
+        "variation_step": None,
+        "Q0s": None,
+    }
 
-    with open("config.yaml", "r") as f:
+    with open(sys.argv[1], "r") as f:
         yaml_args = yaml.load(f.read())
 
     args.update(yaml_args)
+
+    varied_args = {
+        k: v for k, v in args.items() if isinstance(v, list)
+    }
+
+    try:
+        labels = [
+            ", ".join(": ".join([str(k), str(v[j])]) for k, v in varied_args.items()) for j in range(args["num_agents"])
+        ]
+    except IndexError:
+        labels = ["Bandit"]
+
+    pprint(labels)
 
     graphs = averaged_runs(**args)
 
@@ -116,13 +140,19 @@ if __name__ == "__main__":
     # Removing first step from plots
     for j, graph in enumerate(graphs):
         average_score_plot.plot(
-            graph["t"][1:], graph["average_score"][1:], label=str(args["epses"][j])
+            graph["t"][1:], 
+            graph["average_score"][1:],
+            label=str(labels[j])
         )
 
     for j, graph in enumerate(graphs):
         pcs = [g * 100 for g in graph["optimal_choice_prop"][1:]]
-        optimal_choice_prop_plot.plot(graph["t"][1:], pcs, label=str(args["epses"][j]))
+        optimal_choice_prop_plot.plot(
+            graph["t"][1:],
+            pcs,
+            label=str(labels[j])
+        )
 
     plt.legend()
 
-    plt.savefig(sys.argv[1])
+    plt.savefig(sys.argv[1]+".png")

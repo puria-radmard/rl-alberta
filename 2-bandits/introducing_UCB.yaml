@@ -1,0 +1,15 @@
+num_agents: 4
+num_steps: 1000
+k: 10
+num_runs: 200
+
+step_methods: "constant"
+epses: 0.3
+alphas: [0.1, 0.4, 0.1, 0.4]
+Q0s: 0.0
+cs: [0, 0.2, 0.2, 0]
+
+reward_uncertainty: 1
+q_mean: 0
+q_var: 1
+variation_step: 0.1

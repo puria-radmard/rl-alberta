@@ -2,7 +2,7 @@
 
 ## General set-up
 
-# Must be = len(epses)
+# Must be = len(epses) = len(alphas) = ...
 num_agents: 8
 # Number of steps in run
 num_steps: 10000

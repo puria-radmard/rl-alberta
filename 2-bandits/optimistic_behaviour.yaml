@@ -1,12 +1,12 @@
-num_agents: 4
-num_steps: 10000
+num_agents: 5
+num_steps: 1000
 k: 10
 num_runs: 200
 
 step_methods: "incremental"
-epses: [0, 0.01, 0.1, 0.4]
+epses: 0.3
 alphas: 0.0
-Q0s: 0.0
+Q0s: [0, 0.1, 0.5, 1, 5]
 cs: 0.0
 
 reward_uncertainty: 1
