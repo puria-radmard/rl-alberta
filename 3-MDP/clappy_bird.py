@@ -68,7 +68,7 @@ while True:
         agent.A.append(a_t)
         agent.R.append(r_t)
 
-        print(agent.S[-1], agent.A[-1], agent.R[-1])
+        print(agent.state)
 
         agent.prev_state = agent.state
 
@@ -88,6 +88,7 @@ while True:
 
     # Apply expected returns and Bellman's
     agent.post_process()
+
 
 
 # finalise

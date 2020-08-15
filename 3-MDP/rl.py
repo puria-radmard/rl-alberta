@@ -1,5 +1,5 @@
 from graphics_util import *
-from grakn.client import GraknClient
+# from grakn.client import GraknClient
 
 tubeimg = "tubes.gif"
 wn.addshape(tubeimg)
@@ -95,6 +95,13 @@ class Agent(TurtleController):
         # pi(a|s) a distribtuion - it is a probability of jumping given the state
         self.state_pis = {}
 
+        # These are the list of returns per state, which are found retroactively in post_process
+        self.state_Gs = {}
+        # These are the list of returns per state-action pair
+        self.state_action_Gs = {}
+        # These are the counts of times that state-action pairs lead to another state via a reward
+        self.four_var_counts = {}
+
     def read_environment(self, env):
         reward = 0
         env.game_state, reward = self.check_for_death(env, reward)
@@ -136,7 +143,6 @@ class Agent(TurtleController):
             if abs(env.tubes[i].x - self.x) < 6 and abs(env.tubes[i].y - self.y) < 78:
                 player_score += 1
                 reward += env.score_reward
-                print("ASDF")
 
         return player_score, reward
 
@@ -179,22 +185,22 @@ class Agent(TurtleController):
             )
             state_dict["side-of-gap"] = "LEFT" if proportion_of_way < 0.5 else "RIGHT"
         except IndexError:
+            closest_tubes = [None, tube_coords[0]]
             state_dict["side-of-gap"] = "LEFT"
 
-        try:
-            tube_height = closest_tubes[1][1]
-            if tube_height - self.y > 78:
-                state_dict["relative-height"] = "LOW"
-            elif 0 < tube_height - self.y <= 78:
-                state_dict["relative-height"] = "MIDLOW"
-            elif 0 > tube_height - self.y >= -78:
-                state_dict["relative-height"] = "MIDHIGH"
-            else:
-                state_dict["relative-height"] = "HIGH"
-
-        except NameError:
-            # BAD - make this a single tube search instead
+        tube_height = closest_tubes[1][1]
+        if tube_height - self.y > 78:
+            state_dict["relative-height"] = "LOW"
+        elif 0 < tube_height - self.y <= 78:
+            state_dict["relative-height"] = "MIDLOW"
+        elif 0 > tube_height - self.y >= -78:
             state_dict["relative-height"] = "MIDHIGH"
+        else:
+            state_dict["relative-height"] = "HIGH"
+
+        # except NameError:
+        #     # BAD - make this a single tube search instead
+        #     state_dict["relative-height"] = "MIDHIGH"
 
         if self.energy > 100 - 1.5 * self.jump_cost:
             state_dict["energy-level"] = "HIGH"
@@ -214,19 +220,36 @@ class Agent(TurtleController):
 
         return state_dict
 
+
     def post_process(self):
 
-        return None
+        state_strings = ["-".join(str(x) for x in s.values()) for s in self.S] # One extra one left over from death
+        state_action_strings = ["-".join([state_strings[i], self.A[i]]) for i in range(len(self.S) - 1)]
 
         # Make this a solid attribute later
-        with GraknClient(uri="localhost:48555") as client:
-            with client.session(keyspace="clappy_bird") as session:
-                
-                # Exluding death state
+        # with GraknClient(uri="localhost:48555") as client:
+        #     with client.session(keyspace="clappy_bird") as session:
+
+        for asdf in ".":
+        
                 for j in range(len(self.S) - 1):
-                    s = self.S[j]
-                    a = self.A[j]
-                    r = self.R[j]
+
+                    # First let's find the expected returns | S at each state passed in this round:
+
+                    G = 0
+                    future_states = state_strings[j:]
+                    future_rewards = self.R[j:]
+                    for i in range(len(future_rewards)):
+                        G += future_rewards[i] * (self.gamma ** i)
+
+                    try:
+                        self.state_Gs[state_strings[j]].append(G)
+                        self.state_action_Gs[state_action_strings[j]].append(G)
+                    except KeyError:
+                        self.state_Gs[state_strings[j]] = [G]
+                        self.state_action_Gs[state_action_strings[j]] = [G]
+
+                    # Then let's do the same for state-action pairs 
 
         self.S = []
         self.A = []
