@@ -75,11 +75,11 @@ state_pen.hideturtle()
 state_pen.goto(-100, -260)
 
 
-def update_pens(agent, state_pen, pen, energy_pen, player_score):
+def update_pens(agent, state, state_pen, pen, energy_pen, player_score):
 
     state_pen.clear()
     state_string = ""
-    for k, v in agent.state.items():
+    for k, v in state.items():
         state_string += f"{k}: {v} \n"
     state_pen.write(state_string, align="left", font=("Comic Sans", 20, "bold"))
 

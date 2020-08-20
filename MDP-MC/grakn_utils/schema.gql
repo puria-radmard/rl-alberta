@@ -1,0 +1,41 @@
+define
+
+    state sub entity,
+
+        plays start_state,
+        plays end_state,
+        
+        # has energy_level,
+        # has absolute_height,
+        # has relative_height,
+        # has side_of_gap,
+        # has time_since_jump;
+
+        has total_count,
+        has state_string,
+        has pi,
+        has v;
+
+    state_transition sub relation,
+
+        relates start_state,
+        relates end_state,
+
+        has num_occurances,
+        has reward,
+        has action;
+
+    state_string sub attribute,
+        value string;
+    pi sub attribute,
+        value double;
+    v sub attribute,
+        value double;
+    num_occurances sub attribute,
+        value double;
+    total_count sub attribute,
+        value double;
+    reward sub attribute,
+        value double;
+    action sub attribute,
+        value string;

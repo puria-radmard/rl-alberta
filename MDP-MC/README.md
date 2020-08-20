@@ -56,4 +56,8 @@ export DISPLAY=$(w -h $USER | awk '$2 ~ /:[0-9.]*/{print $2}')
 ```
 in this directory to support the graphics for the turtle python package
 
-Second, you will need to set up a Grakn keyspace, which is used to save the graphs of each run persistently ater the terminal state of that run.
+Second, you will need to set up a Grakn keyspace, which is used to save the graphs of each episode persistently after the terminal state N episodes.
+```
+sudo grakn server start
+sudo grakn console --keyspace clappy_bird --file /home/puria-radmard/Repos/rl-coursera/3-MDP/grakn_utils/schema.gql
+```
