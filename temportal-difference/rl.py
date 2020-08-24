@@ -1,6 +1,6 @@
 from graphics_util import *
 import numpy as np
-from grakn.client import GraknClient
+# from grakn.client import GraknClient
 
 tubeimg = "tubes.gif"
 wn.addshape(tubeimg)
@@ -22,7 +22,7 @@ class Tube(TurtleController):
 
 
 class Environment:
-    def __init__(self, tube_v, g, death_reward, score_reward, low_energy_reward):
+    def __init__(self, tube_v, tube_gen_rate, g, death_reward, score_reward, low_energy_reward):
 
         self.tube_v = tube_v
         self.g = g
@@ -30,6 +30,9 @@ class Environment:
         self.death_reward = death_reward
         self.score_reward = score_reward
         self.low_energy_reward = low_energy_reward
+        self.tube_gen_rate = tube_gen_rate
+
+        self.tube_gap = tube_gen_rate * tube_v
 
         self.game_state = 1
 
@@ -42,7 +45,7 @@ class Environment:
 
     def move_tubes(self, agent):
         # Generate tube on RHS
-        if agent.t % 25 == 0:
+        if agent.t % self.tube_gen_rate == 0:
             self.generate_new_tube()
 
         # tubes cascade to LHS
@@ -71,13 +74,6 @@ class Agent(TurtleController):
 
         self.refresh_coords()
 
-        self.start_state = {
-            "side-of-gap": "START",
-            "relative-height": "START",
-            "energy-level": "START",
-            "absolute-height": "START",
-            "time-since-jump": 0,
-        }
         self.death_state = {
             "side-of-gap": "DEATH",
             "relative-height": "DEATH",
@@ -91,19 +87,22 @@ class Agent(TurtleController):
         self.R = []
 
         self.gamma = discount_rate
+        self.epsilon = 0.2
 
         self.A_script = ["JUMP", "FALL"]
+        self.pi_init = [0.05, 0.95]
 
         self.state_info = {
             "DEATH-DEATH-DEATH-DEATH-0": {
-                "pi": 0,
+                "pi": {a: 1/len(self.A_script) for a in self.A_script},
                 "v": 0,
                 "count": 0,
                 "transitions": {}
             },
             "START-START-START-START-0": {
                 # Policy (probabiliity of jumping) at that state
-                "pi": 0.5,
+                "pi": {a: 1/len(self.A_script) for a in self.A_script},
+                "q" : {a: 0 for a in self.A_script},
                 # Value estimate
                 "v": 0,
                 # Number of times state has been accessed - same as one before
@@ -117,9 +116,14 @@ class Agent(TurtleController):
         #self.state_info["W-X-Y-Z-1"] = {
         {
             # Policy (probabiliity of jumping) at that state
-            "pi": 0.69,
+            "pi": {a: 1/len(self.A_script) for a in self.A_script},
             # Value estimate
             "v": 123,
+            # Action value estimate
+            "q": {
+                "JUMP": 94,
+                "FALL": 95
+            },
             # Number of times state has been accessed - same as one before
             "count": 189,
             # Counts and rewards of transitions - allows live probability movement
@@ -136,43 +140,6 @@ class Agent(TurtleController):
                 }
             }
         }
-
-
-    def check_rewards(self, env):
-        reward = 0
-        env.game_state, reward = self.check_for_death(env, reward)
-        self.player_score, reward = self.check_for_new_score(
-            env, self.player_score, reward
-        )
-        reward = self.check_for_low_energy(env, reward)
-        return reward
-
-    def apply_policy(self, state):
-
-        state_string = "-".join(str(x) for x in state.values())
-        state_info = self.state_info.get(state_string)
-
-        # Initialise state 
-        if state_info == None:
-            state_info = {
-                # Policy (probabiliity of jumping) at that state
-                "pi": 0.5,
-                # Value estimate
-                "v": 0,
-                # Number of times state has been accessed - same as one before
-                "count": 0,
-                # Counts of transitions - allows live probability movement
-                "transitions": {a: {} for a in self.A_script}
-            }
-
-            self.state_info[state_string] = state_info
-
-        pi = state_info["pi"]
-
-        if random() < pi:
-            self.jump()
-            return "JUMP"
-        return "FALL"
 
     def jump(self):
         if self.energy >= self.jump_cost:
@@ -220,52 +187,70 @@ class Agent(TurtleController):
         self.vertical_speed += 0.05 * env.g
         self.sety(self.y + self.vertical_speed)
 
+    def check_rewards(self, env):
+        reward = 0
+        env.game_state, reward = self.check_for_death(env, reward)
+
+        self.player_score, reward = self.check_for_new_score(
+            env, self.player_score, reward
+        )
+        reward = self.check_for_low_energy(env, reward)
+        return reward
+
+    def apply_policy(self, state):
+
+        state_string = "-".join(str(x) for x in state.values())
+        state_info = self.state_info.get(state_string)
+
+        # Initialise state 
+        if state_info == None:
+            state_info = {
+                # Policy (probabiliity of jumping) at that state
+                "pi": {self.A_script[i]: self.pi_init[i] for i in range(len(self.A_script))},
+                # Action value estimate
+                "q" : {a: 0 for a in self.A_script},
+                # State value estimate
+                "v": 0,
+                # Number of times state has been accessed - same as one before
+                "count": 0,
+                # Counts of transitions - allows live probability movement
+                "transitions": {a: {} for a in self.A_script}
+            }
+            self.state_info[state_string] = state_info
+        pi = state_info["pi"]
+
+        # GENERALISE THIS
+        if random() < pi["JUMP"]:
+            self.jump()
+            return "JUMP"
+        return "FALL"
+
+
     def find_state(self, env):
 
         state_dict = {}
 
-        # side-of-gap
         tube_coords = sorted([(t.x, t.y) for t in env.tubes], key=lambda x: abs(x[0]))
         try:
             closest_tubes = sorted([tube_coords[0], tube_coords[1]], key=lambda x: x[0])
             proportion_of_way = closest_tubes[0][0] / (
                 closest_tubes[0][0] - closest_tubes[1][0]
             )
-            state_dict["side-of-gap"] = "LEFT" if proportion_of_way < 0.5 else "RIGHT"
+            prop = round(proportion_of_way, 3)
         except IndexError:
             closest_tubes = [None, tube_coords[0]]
-            state_dict["side-of-gap"] = "LEFT"
-
-        tube_height = closest_tubes[1][1]
-        if tube_height - self.y > 78:
-            state_dict["relative-height"] = "LOW"
-        elif 0 < tube_height - self.y <= 78:
-            state_dict["relative-height"] = "MIDLOW"
-        elif 0 > tube_height - self.y >= -78:
-            state_dict["relative-height"] = "MIDHIGH"
+            proportion_of_way = (env.tube_gap - closest_tubes[1][0]) / env.tube_gap
+            prop = round(proportion_of_way, 3)
+        if prop < 0:
+            state_dict["prop"] = 0
+        elif prop > 1:
+            state_dict["prop"] = 1
         else:
-            state_dict["relative-height"] = "HIGH"
+            state_dict["prop"] = prop
 
-        # except NameError:
-        #     # BAD - make this a single tube search instead
-        #     state_dict["relative-height"] = "MIDHIGH"
-
-        if self.energy > 100 - 1.5 * self.jump_cost:
-            state_dict["energy-level"] = "HIGH"
-        elif self.energy > 1.5 * self.jump_cost:
-            state_dict["energy-level"] = "MID"
-        else:
-            state_dict["energy-level"] = "LOW"
-
-        if self.y > 260:
-            state_dict["absolute-height"] = "HIGH"
-        elif self.y < -260:
-            state_dict["absolute-height"] = "LOW"
-        else:
-            state_dict["absolute-height"] = "MID"
-
-        state_dict["time-since-jump"] = self.time_since_jump
-
+        state_dict["vel"] = self.vertical_speed
+        state_dict["height"] = self.y
+        state_dict["rel-height"] = closest_tubes[1][1] - self.y
         return state_dict
 
 
@@ -278,15 +263,14 @@ class Agent(TurtleController):
         try:
             self.state_info[s_prev]["transitions"][a_t][(s_t, r_t)] += 1
 
-
         except KeyError:
             self.state_info[s_prev]["transitions"][a_t][(s_t, r_t)] = 1
 
 
-
     def bellman_update(self, state):
         """
-        Change v(s) as per update to Bellman's equation:
+        Unused
+        Change bootstrapped v(s) as per update to Bellman's equation:
         v(s) <-- Sum_a[pi(a|s)*SUM_sbar,r*p[(sbar,r|s,a)*(r+gamma*v(sbar))]]
         """
 
@@ -295,37 +279,39 @@ class Agent(TurtleController):
 
         old_vs = state_dict["v"]
 
-        # GENERALISE THIS AND pi OVERALL
         # fall cases:
-        for sbar_and_r, t_count in state_dict["transitions"]["JUMP"].items():
-            
-            prob = t_count/state_dict["count"]
-            v_sbar = self.state_info[sbar_and_r[0]]["v"]
-            addition = state_dict["pi"] * prob * (sbar_and_r[1] + self.gamma*v_sbar)
-            new_v_s += addition
+        for a in self.A_script:
 
-        for sbar_and_r, t_count in state_dict["transitions"]["FALL"].items():
-            
-            prob = t_count/state_dict["count"]
-            v_sbar = self.state_info[sbar_and_r[0]]["v"]
-            addition = (1 - state_dict["pi"]) * prob * (sbar_and_r[1] + self.gamma*v_sbar)
-            new_v_s += addition
-        
+            action_count = sum(list(state_dict["transitions"][a].values()))
+
+            for sbar_and_r, t_count in state_dict["transitions"][a].items():
+
+                prob = t_count/action_count
+                v_sbar = self.state_info[sbar_and_r[0]]["v"]
+                addition = state_dict["pi"][a] * prob * (sbar_and_r[1] + self.gamma*v_sbar)
+                new_v_s += addition        
 
         self.state_info[state]["v"] = new_v_s
 
+    def monte_carlo_q_update(self):
+        for t in list(range(len(self.A)))[::-1]:
+            try:
+                latest_episode_Gs = [self.R[t] + latest_episode_Gs[0] * self.gamma] + latest_episode_Gs
+            except NameError:
+                latest_episode_Gs = [self.R[-1]]
+        
+        for j, s in enumerate(self.S):
+            a = self.A[j]
+            state_string = "-".join(str(x) for x in s.values())
+            action_count = max([sum(self.state_info[state_string]["transitions"][a].values()), 1])
 
-    def evaluate_policy(self):
-        """Unused"""
-        delta = float('inf')
-        theta = 0.0001
-        while delta > theta:
-            delta = 0
-            non_death_states = [state for state in self.state_info.keys() if "DEATH" not in state]
-            for state in non_death_states:
-                v = self.state_info[state]["v"]
-                self.bellman_update(state)
-                delta = max([delta, abs(v - self.state_info[state]["v"])])
+            current_q = self.state_info[state_string]["q"][a]
+            new_G = latest_episode_Gs[j]
+            self.state_info[state_string]["q"][a] = current_q + (1/action_count)*(new_G - current_q)
+
+        self.S = []
+        self.A = []
+        self.R = []
 
 
     def q_greedify_policy(self, state):
@@ -334,53 +320,44 @@ class Agent(TurtleController):
 
         action_returns = [0 for a in self.A_script]
 
+        if False:
+            # Greedify based on bootstrapped s/a combinations
+            for i, a in enumerate(self.A_script):
+                action_count = sum(list(state_dict["transitions"][a].values()))
+                for sbar_and_r, t_count in state_dict["transitions"][a].items():
+                    prob = t_count/action_count
+                    v_sbar = self.state_info[sbar_and_r[0]]["v"]
+                    addition = prob * (sbar_and_r[1] + self.gamma*v_sbar)
+                    action_returns[i] += addition
+
+        # Greedify based on Monte Carlo action values - by itself this would be enough with exploring starts
         for i, a in enumerate(self.A_script):
+            action_returns[i] = state_dict["q"][a]
 
-            for sbar_and_r, t_count in state_dict["transitions"][a].items():
-
-                prob = t_count/state_dict["count"]
-                v_sbar = self.state_info[sbar_and_r[0]]["v"]
-                addition = prob * (sbar_and_r[1] + self.gamma*v_sbar)
-
-                action_returns[i] += addition
+        # TODO: make greedy choices split probability?
             
         greedy_choice = np.argmax(action_returns)
-        greedy_probability = 1 / len([a for a in range(len(self.A_script)) if a == greedy_choice])
+        greedy_probability = 1 - self.epsilon + (self.epsilon/len(self.A_script))
+        exploratorive_probability = self.epsilon / len(self.A_script)
 
-        # GENERALISE THIS
-        if self.A_script[greedy_choice] == "JUMP":
-            self.state_info[state]["pi"] = greedy_probability
-        elif self.A_script[greedy_choice] == "FALL":
-            self.state_info[state]["pi"] = 1-greedy_probability
-        else:
-            raise ValueError("wtf")
-
-
-    def iterate_policy(self):
-        """Unused"""
-        pi_stable = False
-        while not pi_stable:
-            pi_stable = True
-            for state in self.state_info:
-                pi_old = [s["pi"] for s in self.state_info]
-                self.q_greedify_policy(state)
-                pi_new = [s["pi"] for s in self.state_info]
-                if not np.array_equal(pi_old, pi_new):
-                    pi_stable = False
-
+        for i, a in enumerate(self.A_script):
+            if i == greedy_choice:
+                self.state_info[state]["pi"][a] = greedy_probability
+            else:
+                self.state_info[state]["pi"][a] = exploratorive_probability
+        
+        try:
+            assert sum(self.state_info[state]["pi"].values()) == 1
+        except:
+            import pdb; pdb.set_trace()
 
     def post_process(self):
-        delta = float('inf')
-        theta = 0.0001
-        while delta > theta:
-            delta = 0
-            # GENERALISE
-            non_death_states = [state for state in self.state_info.keys() if "DEATH" not in state]
-            for state in non_death_states:
-                v = self.state_info[state]["v"]
-                self.q_greedify_policy(state)
-                self.bellman_update(state)
-                delta = max([delta, abs(v - self.state_info[state]["v"])])
+
+        self.monte_carlo_q_update()
+
+        non_death_states = [state for state in self.state_info.keys() if "DEATH" not in state]
+        for state in non_death_states:
+            self.q_greedify_policy(state)
 
 
     def upload(self):

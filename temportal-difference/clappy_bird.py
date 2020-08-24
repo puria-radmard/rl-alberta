@@ -1,9 +1,10 @@
 from graphics_util import *
 from rl import Environment, Agent
 from pprint import pprint
+import pickle
 
 env = Environment(
-    tube_v=10, g=-50, death_reward=-8, score_reward=5, low_energy_reward=-0.01
+    tube_v=10, tube_gen_rate = 25, g=-50, death_reward=-8, score_reward=5, low_energy_reward=-0.01
 )
 
 agent = Agent(jump_speed=30, jump_cost=20, stamina=0.75, discount_rate=0.9, avi=bird)
@@ -41,10 +42,8 @@ while True:
 
     # Main game loop
     agent.t = 0
-    s_prev = agent.start_state
 
-    #while True:
-    while env.game_state == 1:
+    while True:
 
         wn.update()
 
@@ -53,17 +52,25 @@ while True:
         if agent.player_score > highscore:
             highscore = agent.player_score
 
+        # Get s_t
+        s_t = agent.find_state(env); agent.S.append(s_t)
+        # Do a_t
+        a_t = agent.apply_policy(s_t); agent.A.append(a_t)
+        agent.time_since_jump += 1
+        # Get r_t from s_t and a_t
+        r_t = agent.check_rewards(env); agent.R.append(r_t)
+
         #sleep(0.05)
         agent.t += 1
 
-        # Get s_t
-        s_t = agent.find_state(env)
-        # Do a_t
-        a_t = agent.apply_policy(s_t)
-        agent.time_since_jump += 1
-        # Get r_t from s_t and a_t
-        r_t = agent.check_rewards(env)
-        agent.update_state_info(s_t, s_prev, a_t, r_t)
+        if env.game_state == 0:
+            break
+        
+        # Removes need for an explicity start state
+        try:
+            agent.update_state_info(s_t, s_prev, a_t, r_t)
+        except NameError:
+            pass
         s_prev = s_t
 
         # Standard loop actions
@@ -79,18 +86,17 @@ while True:
     agent.avi.direction = "stop"
 
     s_t = agent.death_state
+
     agent.update_state_info(s_t, s_prev, a_t, r_t)
 
-    agent.post_process()
+    agent.post_process()    
     
     if num_eps % 500 == 0:
-        print(f"Uploading information after {num_eps} episodes...")
-        agent.upload()
-        print("Done")
-
-    # pprint(
-    #     agent.state_info
-    # )
+        # print(f"Uploading information after {num_eps} episodes...")
+        # agent.upload()
+        # print("Done")
+        with open(f"state-{num_eps}.pkl", "wb") as jfile:
+            pickle.dump(agent.state_info, jfile)
 
 # finalise
 wn.mainloop()
